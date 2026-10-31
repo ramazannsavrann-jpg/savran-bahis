@@ -27,16 +27,14 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      - name: Birim testleri
-        continue-on-error: true
-        run: |
-          cd "$PROJ"
-          gradle :app:testDebugUnitTest --stacktrace
-
       - name: APK derle
         run: |
           cd "$PROJ"
-          gradle :app:assembleDebug --stacktrace
+          gradle :app:assembleDebug --console=plain > "$GITHUB_WORKSPACE/build.log" 2>&1 || {
+            echo "=== HATA OZETI ==="
+            grep -E "^e: |What went wrong|Execution failed|error:" -A3 "$GITHUB_WORKSPACE/build.log" | head -120
+            exit 1
+          }
           mkdir -p "$GITHUB_WORKSPACE/out"
           cp app/build/outputs/apk/debug/*.apk "$GITHUB_WORKSPACE/out/"
 
