@@ -9,11 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: ZIP ac
         run: |
+          # Son yüklenen ZIP seçilir (birden fazla ZIP olsa bile)
+          ZIP=$(git diff --name-only HEAD~1 HEAD -- '*.zip' 2>/dev/null | head -n1)
+          if [ -z "$ZIP" ] || [ ! -f "$ZIP" ]; then ZIP=$(ls -1 *.zip | sort | tail -n1); fi
+          echo "Kullanilan ZIP: $ZIP"
           mkdir -p /tmp/proj
-          unzip -q "$(ls *.zip | head -n1)" -d /tmp/proj
+          unzip -q "$ZIP" -d /tmp/proj
           PROJ=$(dirname "$(find /tmp/proj -name settings.gradle.kts | head -n1)")
           echo "PROJ=$PROJ" >> "$GITHUB_ENV"
           ls "$PROJ"
@@ -27,6 +33,20 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      - name: Imza anahtari
+        env:
+          KS_B64: ${{ secrets.SAVRAN_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.SAVRAN_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ]; then
+            echo "$KS_B64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/savran.jks"
+            echo "SAVRAN_KEYSTORE=$RUNNER_TEMP/savran.jks" >> "$GITHUB_ENV"
+            echo "SAVRAN_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "Sabit imza anahtari kullaniliyor (guncelleme uzerine kurulur)."
+          else
+            echo "UYARI: imza secret'lari yok; gecici debug imzasi kullanilacak (uzerine kurulum calismayabilir)."
+          fi
+
       - name: APK derle
         run: |
           cd "$PROJ"
@@ -36,9 +56,19 @@ jobs:
             exit 1
           }
           mkdir -p "$GITHUB_WORKSPACE/out"
-          cp app/build/outputs/apk/debug/*.apk "$GITHUB_WORKSPACE/out/"
+          cp app/build/outputs/apk/debug/*.apk "$GITHUB_WORKSPACE/out/SavranAnaliz.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SavranBahisTahmin-debug-apk
+          name: SavranAnaliz-apk
           path: out/*.apk
+
+      - name: Testler (APK'yi engellemez)
+        continue-on-error: true
+        run: |
+          cd "$PROJ"
+          gradle :app:testDebugUnitTest --console=plain > "$GITHUB_WORKSPACE/test.log" 2>&1 && echo "=== TESTLER GECTI ===" || {
+            echo "=== TEST HATA OZETI ==="
+            grep -E "FAILED|Exception|expected|^e: " -A2 "$GITHUB_WORKSPACE/test.log" | head -80
+            exit 1
+          }
