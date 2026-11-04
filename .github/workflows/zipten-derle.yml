@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -62,6 +65,16 @@ jobs:
         with:
           name: SavranAnaliz-apk
           path: out/*.apk
+
+      - name: APK'yi apk dalina koy (Claude indirebilsin)
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/apkrepo && cd /tmp/apkrepo
+          git init -q && git checkout -q -b apk
+          cp "$GITHUB_WORKSPACE/out/SavranAnaliz.apk" .
+          git add SavranAnaliz.apk
+          git -c user.name="github-actions" -c user.email="actions@github.com" commit -qm "APK ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" apk
 
       - name: Testler (APK'yi engellemez)
         continue-on-error: true
