@@ -72,7 +72,12 @@ jobs:
           mkdir -p /tmp/apkrepo && cd /tmp/apkrepo
           git init -q && git checkout -q -b apk
           cp "$GITHUB_WORKSPACE/out/SavranAnaliz.apk" .
-          git add SavranAnaliz.apk
+          # Uygulama içi güncelleme bu dosyaya bakar.
+          VC=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' "$PROJ/app/build.gradle.kts" | head -n1)
+          VN=$(grep -oP 'versionName\s*=\s*"\K[^"]+' "$PROJ/app/build.gradle.kts" | head -n1)
+          echo "{\"versionCode\": $VC, \"versionName\": \"$VN\", \"commit\": \"${GITHUB_SHA::7}\"}" > version.json
+          cat version.json
+          git add SavranAnaliz.apk version.json
           git -c user.name="github-actions" -c user.email="actions@github.com" commit -qm "APK ${GITHUB_SHA::7}"
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" apk
 
